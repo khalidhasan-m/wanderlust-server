@@ -1,24 +1,35 @@
-const express = require("express");
-const dotenv = require("dotenv");
-const cors = require("cors");
-dotenv.config();
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-const { requireAuth } = require("./middleware/authMiddleware");
+import express from "express";
+import dotenv from "dotenv";
+import cors from "cors";
+import { MongoClient, ServerApiVersion, ObjectId } from "mongodb";
+import { requireAuth } from "./middleware/authMiddleware.js";
 
-const uri = process.env.MONGODB_URI;
-const PORT = process.env.PORT || 5050;
+
+
+dotenv.config();
+
 const app = express();
 
-// CORS configuration to allow cookies from Next.js
+const PORT = process.env.PORT || 5050;
+const uri = process.env.MONGODB_URI;
+
+// --------------------
+// Middleware
+// --------------------
+
 app.use(
   cors({
     origin: process.env.FRONT_END_URL || "http://localhost:3000",
     credentials: true,
   }),
 );
+
 app.use(express.json());
 
-// MongoDB connection caching for Serverless (Vercel)
+// --------------------
+// MongoDB Connection
+// --------------------
+
 let cachedClient = null;
 
 async function connectDB() {
@@ -35,143 +46,221 @@ async function connectDB() {
   });
 
   await client.connect();
+
   cachedClient = client;
-  console.log("Connected to Database!");
+
+  console.log("MongoDB Connected");
+
   return cachedClient;
 }
 
-// --- DEFINE ROUTES ---
+// --------------------
+// Root
+// --------------------
 
 app.get("/", (req, res) => {
-  res.send("Hello World!");
+  res.json({
+    message: "Wanderlust Server Running",
+  });
 });
 
-// PROFILE ROUTE
+// --------------------
+// User Profile
+// --------------------
+
 app.get("/user/profile", requireAuth, async (req, res) => {
-  try {
-    res.json(req.user);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch user profile" });
-  }
+  res.json(req.user);
 });
 
-// PUBLIC ROUTES
+// --------------------
+// Destinations
+// --------------------
+
 app.get("/destination", async (req, res) => {
   try {
     const client = await connectDB();
+
     const db = client.db("wanderlust");
-    const result = await db.collection("destinations").find().toArray();
-    res.json(result);
+
+    const data = await db.collection("destinations").find().toArray();
+
+    res.json(data);
   } catch (error) {
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error(error);
+
+    res.status(500).json({
+      error: "Server Error",
+    });
   }
 });
 
 app.get("/destination/:id", async (req, res) => {
   try {
-    const { id } = req.params;
     const client = await connectDB();
+
     const db = client.db("wanderlust");
+
     const result = await db.collection("destinations").findOne({
-      _id: new ObjectId(id),
+      _id: new ObjectId(req.params.id),
     });
+
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({
+      error: "Server Error",
+    });
   }
 });
 
-// PROTECTED ROUTES
 app.post("/destination", requireAuth, async (req, res) => {
   try {
-    const destinationData = req.body;
-    destinationData.userId = req.user.id;
     const client = await connectDB();
+
     const db = client.db("wanderlust");
-    const result = await db
-      .collection("destinations")
-      .insertOne(destinationData);
+
+    const destination = {
+      ...req.body,
+      userId: req.user.id,
+    };
+
+    const result = await db.collection("destinations").insertOne(destination);
+
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({
+      error: "Server Error",
+    });
   }
 });
 
 app.patch("/destination/:id", requireAuth, async (req, res) => {
   try {
-    const { id } = req.params;
-    const updatedData = req.body;
     const client = await connectDB();
+
     const db = client.db("wanderlust");
-    const result = await db
-      .collection("destinations")
-      .updateOne({ _id: new ObjectId(id) }, { $set: updatedData });
+
+    const result = await db.collection("destinations").updateOne(
+      {
+        _id: new ObjectId(req.params.id),
+      },
+      {
+        $set: req.body,
+      },
+    );
+
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({
+      error: "Server Error",
+    });
   }
 });
 
 app.delete("/destination/:id", requireAuth, async (req, res) => {
   try {
-    const { id } = req.params;
     const client = await connectDB();
+
     const db = client.db("wanderlust");
+
     const result = await db.collection("destinations").deleteOne({
-      _id: new ObjectId(id),
+      _id: new ObjectId(req.params.id),
     });
+
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({
+      error: "Server Error",
+    });
   }
 });
+
+// --------------------
+// Booking
+// --------------------
 
 app.post("/booking", requireAuth, async (req, res) => {
   try {
-    const bookingData = req.body;
-    bookingData.userId = req.user.id;
     const client = await connectDB();
+
     const db = client.db("wanderlust");
-    const result = await db.collection("bookings").insertOne(bookingData);
+
+    const booking = {
+      ...req.body,
+
+      userId: req.user.id,
+    };
+
+    const result = await db.collection("bookings").insertOne(booking);
+
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error(error);
+
+    res.status(500).json({
+      error: "Server Error",
+    });
   }
 });
 
+// User based booking
 app.get("/booking/:userId", requireAuth, async (req, res) => {
   try {
+    // security check
+    if (req.user.id !== req.params.userId) {
+      return res.status(403).json({
+        error: "Forbidden",
+      });
+    }
+
     const client = await connectDB();
+
     const db = client.db("wanderlust");
-    const result = await db
+
+    const bookings = await db
       .collection("bookings")
-      .find({ userId: req.params.userId })
+      .find({
+        userId: req.params.userId,
+      })
       .toArray();
-    res.json(result);
+
+    res.json(bookings);
   } catch (error) {
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error(error);
+
+    res.status(500).json({
+      error: "Server Error",
+    });
   }
 });
 
 app.delete("/booking/:id", requireAuth, async (req, res) => {
   try {
-    const { id } = req.params;
     const client = await connectDB();
+
     const db = client.db("wanderlust");
+
     const result = await db.collection("bookings").deleteOne({
-      _id: new ObjectId(id),
+      _id: new ObjectId(req.params.id),
     });
+
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({
+      error: "Server Error",
+    });
   }
 });
 
-// Conditional local listener / Vercel export
+// --------------------
+// Local Server
+// --------------------
+
 if (process.env.NODE_ENV !== "production") {
   app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
   });
 }
 
-module.exports = app;
+// Vercel export
+
+export default app;

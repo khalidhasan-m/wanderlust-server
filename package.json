@@ -1,13 +1,11 @@
 {
   "name": "wanderlust-server",
   "version": "1.0.0",
-  "description": "",
-  "license": "ISC",
-  "author": "",
-  "type": "commonjs",
+  "type": "module",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "node index.js",
+    "start": "node index.js"
   },
   "dependencies": {
     "@better-auth/mongo-adapter": "^1.6.25",
