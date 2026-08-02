@@ -31,18 +31,16 @@ app.use(
         return callback(null, true);
       }
 
-      return callback(new Error("CORS blocked"));
+      callback(new Error("CORS blocked"));
     },
 
     credentials: true,
 
     methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
 
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type"],
   }),
 );
-
-app.use(express.json());
 
 // =======================
 // DATABASE
@@ -174,7 +172,7 @@ app.post("/booking", requireAuth, async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    console.log(error);
+    console.log("Booking Error:", error);
 
     res.status(500).json({
       error: "Server Error",

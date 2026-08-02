@@ -1,5 +1,3 @@
-// middleware/authMiddleware.js
-
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "@better-auth/mongo-adapter";
 import { MongoClient } from "mongodb";
@@ -19,24 +17,21 @@ async function getAuth() {
     await cachedClient.connect();
 
     cachedDb = cachedClient.db("wanderlust");
-
-    console.log("MongoDB connected for auth");
   }
 
   cachedAuth = betterAuth({
-    database: mongodbAdapter(
-      cachedDb,
-
-      {
-        client: cachedClient,
-      },
-    ),
+    database: mongodbAdapter(cachedDb, {
+      client: cachedClient,
+    }),
 
     secret: process.env.BETTER_AUTH_SECRET,
 
     baseURL: process.env.BETTER_AUTH_URL,
 
-    trustedOrigins: [process.env.FRONT_END_URL],
+    trustedOrigins: [
+      "http://localhost:3000",
+      "https://wanderlust-seven-gules.vercel.app",
+    ],
   });
 
   return cachedAuth;
@@ -46,35 +41,13 @@ const requireAuth = async (req, res, next) => {
   try {
     const auth = await getAuth();
 
-    const authHeader = req.headers.authorization;
-
-    console.log("AUTH HEADER:", authHeader);
-
-    if (!authHeader) {
-      return res.status(401).json({
-        error: "Authorization token missing",
-      });
-    }
-
-    const token = authHeader.split(" ")[1];
-
-    if (!token) {
-      return res.status(401).json({
-        error: "Invalid token format",
-      });
-    }
-
     const session = await auth.api.getSession({
-      headers: new Headers({
-        authorization: `Bearer ${token}`,
-      }),
+      headers: req.headers,
     });
-
-    console.log("SESSION RESULT:", session);
 
     if (!session?.user) {
       return res.status(401).json({
-        error: "Invalid or expired session",
+        error: "Unauthorized",
       });
     }
 
@@ -82,10 +55,10 @@ const requireAuth = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error("AUTH MIDDLEWARE ERROR:", error);
+    console.error("Auth Error:", error);
 
-    return res.status(401).json({
-      error: "Unauthorized",
+    res.status(401).json({
+      error: "Invalid session",
     });
   }
 };
