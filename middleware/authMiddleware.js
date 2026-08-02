@@ -1,7 +1,6 @@
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "@better-auth/mongo-adapter";
 import { MongoClient } from "mongodb";
-import { fromNodeHeaders } from "better-auth/node";
 
 let cachedClient = null;
 let cachedDb = null;
@@ -42,8 +41,20 @@ const requireAuth = async (req, res, next) => {
   try {
     const auth = await getAuth();
 
+    const headers = new Headers();
+
+    // Receive Bearer token
+    if (req.headers.authorization) {
+      headers.set("authorization", req.headers.authorization);
+    }
+
+    // Also support cookies locally
+    if (req.headers.cookie) {
+      headers.set("cookie", req.headers.cookie);
+    }
+
     const session = await auth.api.getSession({
-      headers: fromNodeHeaders(req.headers),
+      headers,
     });
 
     if (!session?.user) {
