@@ -1,3 +1,5 @@
+// middleware/authMiddleware.js
+
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "@better-auth/mongo-adapter";
 import { MongoClient } from "mongodb";
@@ -17,12 +19,18 @@ async function getAuth() {
     await cachedClient.connect();
 
     cachedDb = cachedClient.db("wanderlust");
+
+    console.log("MongoDB connected for auth");
   }
 
   cachedAuth = betterAuth({
-    database: mongodbAdapter(cachedDb, {
-      client: cachedClient,
-    }),
+    database: mongodbAdapter(
+      cachedDb,
+
+      {
+        client: cachedClient,
+      },
+    ),
 
     secret: process.env.BETTER_AUTH_SECRET,
 
@@ -40,27 +48,33 @@ const requireAuth = async (req, res, next) => {
 
     const authHeader = req.headers.authorization;
 
+    console.log("AUTH HEADER:", authHeader);
+
     if (!authHeader) {
       return res.status(401).json({
-        error: "No authorization header",
+        error: "Authorization token missing",
       });
     }
 
-    const token = authHeader.replace("Bearer ", "");
+    const token = authHeader.split(" ")[1];
 
-    console.log("TOKEN:", token);
+    if (!token) {
+      return res.status(401).json({
+        error: "Invalid token format",
+      });
+    }
 
     const session = await auth.api.getSession({
-      headers: {
+      headers: new Headers({
         authorization: `Bearer ${token}`,
-      },
+      }),
     });
 
-    console.log("SESSION:", session);
+    console.log("SESSION RESULT:", session);
 
     if (!session?.user) {
       return res.status(401).json({
-        error: "Invalid session",
+        error: "Invalid or expired session",
       });
     }
 
@@ -68,7 +82,7 @@ const requireAuth = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error("AUTH ERROR:", error);
+    console.error("AUTH MIDDLEWARE ERROR:", error);
 
     return res.status(401).json({
       error: "Unauthorized",
