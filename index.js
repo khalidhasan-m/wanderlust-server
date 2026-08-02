@@ -4,8 +4,6 @@ import cors from "cors";
 import { MongoClient, ServerApiVersion, ObjectId } from "mongodb";
 import { requireAuth } from "./middleware/authMiddleware.js";
 
-
-
 dotenv.config();
 
 const app = express();
@@ -14,15 +12,37 @@ const PORT = process.env.PORT || 5050;
 const uri = process.env.MONGODB_URI;
 
 // --------------------
-// Middleware
+// CORS
 // --------------------
+
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://wanderlust-seven-gules.vercel.app",
+];
 
 app.use(
   cors({
-    origin: process.env.FRONT_END_URL || "http://localhost:3000",
+    origin: (origin, callback) => {
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("CORS blocked"));
+    },
+
     credentials: true,
+
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
+
+app.options("*", cors());
 
 app.use(express.json());
 
@@ -73,7 +93,7 @@ app.get("/user/profile", requireAuth, async (req, res) => {
 });
 
 // --------------------
-// Destinations
+// Destination Routes
 // --------------------
 
 app.get("/destination", async (req, res) => {
@@ -82,9 +102,9 @@ app.get("/destination", async (req, res) => {
 
     const db = client.db("wanderlust");
 
-    const data = await db.collection("destinations").find().toArray();
+    const destinations = await db.collection("destinations").find().toArray();
 
-    res.json(data);
+    res.json(destinations);
   } catch (error) {
     console.error(error);
 
@@ -100,11 +120,11 @@ app.get("/destination/:id", async (req, res) => {
 
     const db = client.db("wanderlust");
 
-    const result = await db.collection("destinations").findOne({
+    const destination = await db.collection("destinations").findOne({
       _id: new ObjectId(req.params.id),
     });
 
-    res.json(result);
+    res.json(destination);
   } catch (error) {
     res.status(500).json({
       error: "Server Error",
@@ -118,12 +138,12 @@ app.post("/destination", requireAuth, async (req, res) => {
 
     const db = client.db("wanderlust");
 
-    const destination = {
+    const data = {
       ...req.body,
       userId: req.user.id,
     };
 
-    const result = await db.collection("destinations").insertOne(destination);
+    const result = await db.collection("destinations").insertOne(data);
 
     res.json(result);
   } catch (error) {
@@ -143,6 +163,7 @@ app.patch("/destination/:id", requireAuth, async (req, res) => {
       {
         _id: new ObjectId(req.params.id),
       },
+
       {
         $set: req.body,
       },
@@ -175,7 +196,7 @@ app.delete("/destination/:id", requireAuth, async (req, res) => {
 });
 
 // --------------------
-// Booking
+// Booking Routes
 // --------------------
 
 app.post("/booking", requireAuth, async (req, res) => {
@@ -188,6 +209,8 @@ app.post("/booking", requireAuth, async (req, res) => {
       ...req.body,
 
       userId: req.user.id,
+
+      createdAt: new Date(),
     };
 
     const result = await db.collection("bookings").insertOne(booking);
@@ -203,9 +226,9 @@ app.post("/booking", requireAuth, async (req, res) => {
 });
 
 // User based booking
+
 app.get("/booking/:userId", requireAuth, async (req, res) => {
   try {
-    // security check
     if (req.user.id !== req.params.userId) {
       return res.status(403).json({
         error: "Forbidden",
@@ -252,15 +275,15 @@ app.delete("/booking/:id", requireAuth, async (req, res) => {
 });
 
 // --------------------
-// Local Server
+// Local Development
 // --------------------
 
 if (process.env.NODE_ENV !== "production") {
   app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`Server running on ${PORT}`);
   });
 }
 
-// Vercel export
+// Vercel Serverless
 
 export default app;

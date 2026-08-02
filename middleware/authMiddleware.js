@@ -5,8 +5,13 @@ import { fromNodeHeaders } from "better-auth/node";
 
 let cachedClient = null;
 let cachedDb = null;
+let cachedAuth = null;
 
 async function getAuth() {
+  if (cachedAuth) {
+    return cachedAuth;
+  }
+
   if (!cachedClient) {
     cachedClient = new MongoClient(process.env.MONGODB_URI);
 
@@ -15,7 +20,7 @@ async function getAuth() {
     cachedDb = cachedClient.db("wanderlust");
   }
 
-  return betterAuth({
+  cachedAuth = betterAuth({
     database: mongodbAdapter(cachedDb, {
       client: cachedClient,
     }),
@@ -24,8 +29,13 @@ async function getAuth() {
 
     baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
 
-    trustedOrigins: [process.env.FRONT_END_URL || "http://localhost:3000"],
+    trustedOrigins: [
+      "http://localhost:3000",
+      "https://wanderlust-seven-gules.vercel.app",
+    ],
   });
+
+  return cachedAuth;
 }
 
 const requireAuth = async (req, res, next) => {
@@ -38,7 +48,7 @@ const requireAuth = async (req, res, next) => {
 
     if (!session?.user) {
       return res.status(401).json({
-        error: "Unauthorized",
+        error: "Unauthorized: Login required",
       });
     }
 
@@ -46,9 +56,9 @@ const requireAuth = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error("Auth Error:", error);
+    console.error("Auth Middleware Error:", error);
 
-    res.status(401).json({
+    return res.status(401).json({
       error: "Unauthorized",
     });
   }
