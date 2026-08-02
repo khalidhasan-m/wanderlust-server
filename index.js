@@ -11,9 +11,9 @@ const app = express();
 const PORT = process.env.PORT || 5050;
 const uri = process.env.MONGODB_URI;
 
-// --------------------
-// CORS
-// --------------------
+// =======================
+// CORS CONFIG
+// =======================
 
 const allowedOrigins = [
   "http://localhost:3000",
@@ -22,7 +22,7 @@ const allowedOrigins = [
 
 app.use(
   cors({
-    origin: (origin, callback) => {
+    origin(origin, callback) {
       if (!origin) {
         return callback(null, true);
       }
@@ -42,13 +42,11 @@ app.use(
   }),
 );
 
-app.options("*", cors());
-
 app.use(express.json());
 
-// --------------------
-// MongoDB Connection
-// --------------------
+// =======================
+// DATABASE
+// =======================
 
 let cachedClient = null;
 
@@ -67,16 +65,16 @@ async function connectDB() {
 
   await client.connect();
 
-  cachedClient = client;
-
   console.log("MongoDB Connected");
 
-  return cachedClient;
+  cachedClient = client;
+
+  return client;
 }
 
-// --------------------
-// Root
-// --------------------
+// =======================
+// ROOT
+// =======================
 
 app.get("/", (req, res) => {
   res.json({
@@ -84,17 +82,17 @@ app.get("/", (req, res) => {
   });
 });
 
-// --------------------
-// User Profile
-// --------------------
+// =======================
+// USER PROFILE
+// =======================
 
-app.get("/user/profile", requireAuth, async (req, res) => {
+app.get("/user/profile", requireAuth, (req, res) => {
   res.json(req.user);
 });
 
-// --------------------
-// Destination Routes
-// --------------------
+// =======================
+// DESTINATIONS
+// =======================
 
 app.get("/destination", async (req, res) => {
   try {
@@ -102,11 +100,11 @@ app.get("/destination", async (req, res) => {
 
     const db = client.db("wanderlust");
 
-    const destinations = await db.collection("destinations").find().toArray();
+    const data = await db.collection("destinations").find().toArray();
 
-    res.json(destinations);
+    res.json(data);
   } catch (error) {
-    console.error(error);
+    console.log(error);
 
     res.status(500).json({
       error: "Server Error",
@@ -120,11 +118,11 @@ app.get("/destination/:id", async (req, res) => {
 
     const db = client.db("wanderlust");
 
-    const destination = await db.collection("destinations").findOne({
+    const data = await db.collection("destinations").findOne({
       _id: new ObjectId(req.params.id),
     });
 
-    res.json(destination);
+    res.json(data);
   } catch (error) {
     res.status(500).json({
       error: "Server Error",
@@ -138,12 +136,13 @@ app.post("/destination", requireAuth, async (req, res) => {
 
     const db = client.db("wanderlust");
 
-    const data = {
+    const destination = {
       ...req.body,
+
       userId: req.user.id,
     };
 
-    const result = await db.collection("destinations").insertOne(data);
+    const result = await db.collection("destinations").insertOne(destination);
 
     res.json(result);
   } catch (error) {
@@ -153,51 +152,9 @@ app.post("/destination", requireAuth, async (req, res) => {
   }
 });
 
-app.patch("/destination/:id", requireAuth, async (req, res) => {
-  try {
-    const client = await connectDB();
-
-    const db = client.db("wanderlust");
-
-    const result = await db.collection("destinations").updateOne(
-      {
-        _id: new ObjectId(req.params.id),
-      },
-
-      {
-        $set: req.body,
-      },
-    );
-
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({
-      error: "Server Error",
-    });
-  }
-});
-
-app.delete("/destination/:id", requireAuth, async (req, res) => {
-  try {
-    const client = await connectDB();
-
-    const db = client.db("wanderlust");
-
-    const result = await db.collection("destinations").deleteOne({
-      _id: new ObjectId(req.params.id),
-    });
-
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({
-      error: "Server Error",
-    });
-  }
-});
-
-// --------------------
-// Booking Routes
-// --------------------
+// =======================
+// BOOKING
+// =======================
 
 app.post("/booking", requireAuth, async (req, res) => {
   try {
@@ -217,15 +174,13 @@ app.post("/booking", requireAuth, async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    console.error(error);
+    console.log(error);
 
     res.status(500).json({
       error: "Server Error",
     });
   }
 });
-
-// User based booking
 
 app.get("/booking/:userId", requireAuth, async (req, res) => {
   try {
@@ -248,7 +203,7 @@ app.get("/booking/:userId", requireAuth, async (req, res) => {
 
     res.json(bookings);
   } catch (error) {
-    console.error(error);
+    console.log(error);
 
     res.status(500).json({
       error: "Server Error",
@@ -274,16 +229,14 @@ app.delete("/booking/:id", requireAuth, async (req, res) => {
   }
 });
 
-// --------------------
-// Local Development
-// --------------------
+// =======================
+// LOCAL ONLY
+// =======================
 
 if (process.env.NODE_ENV !== "production") {
   app.listen(PORT, () => {
     console.log(`Server running on ${PORT}`);
   });
 }
-
-// Vercel Serverless
 
 export default app;
