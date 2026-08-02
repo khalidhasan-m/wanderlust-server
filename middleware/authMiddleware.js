@@ -26,12 +26,9 @@ async function getAuth() {
 
     secret: process.env.BETTER_AUTH_SECRET,
 
-    baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
+    baseURL: process.env.BETTER_AUTH_URL,
 
-    trustedOrigins: [
-      "http://localhost:3000",
-      "https://wanderlust-seven-gules.vercel.app",
-    ],
+    trustedOrigins: [process.env.FRONT_END_URL],
   });
 
   return cachedAuth;
@@ -41,25 +38,29 @@ const requireAuth = async (req, res, next) => {
   try {
     const auth = await getAuth();
 
-    const headers = new Headers();
+    const authHeader = req.headers.authorization;
 
-    // Receive Bearer token
-    if (req.headers.authorization) {
-      headers.set("authorization", req.headers.authorization);
+    if (!authHeader) {
+      return res.status(401).json({
+        error: "No authorization header",
+      });
     }
 
-    // Also support cookies locally
-    if (req.headers.cookie) {
-      headers.set("cookie", req.headers.cookie);
-    }
+    const token = authHeader.replace("Bearer ", "");
+
+    console.log("TOKEN:", token);
 
     const session = await auth.api.getSession({
-      headers,
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
     });
+
+    console.log("SESSION:", session);
 
     if (!session?.user) {
       return res.status(401).json({
-        error: "Unauthorized: Login required",
+        error: "Invalid session",
       });
     }
 
@@ -67,7 +68,7 @@ const requireAuth = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error("Auth Middleware Error:", error);
+    console.error("AUTH ERROR:", error);
 
     return res.status(401).json({
       error: "Unauthorized",
